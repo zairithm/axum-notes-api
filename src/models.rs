@@ -48,6 +48,66 @@ impl NewNote {
     }
 }
 
+/// Request body for `/signup` and `/login`.
+#[derive(Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct Credentials {
+    pub username: String,
+    pub password: String,
+}
+
+/// A registered user as returned by `/signup`. Never includes the password hash.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct User {
+    pub id: u64,
+    pub username: String,
+}
+
+/// Response body for `/login`.
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+pub struct Token {
+    pub token: String,
+    pub token_type: String,
+    pub expires_in: u64,
+}
+
+impl Credentials {
+    /// Usernames are 3 to 32 letters, digits or `_`, and stored in lowercase.
+    /// Passwords are 8 to 128 characters.
+    pub fn validate_new(self) -> Result<Self, AppError> {
+        let username = self.normalized_username();
+        let len = username.chars().count();
+        if !(3..=32).contains(&len) {
+            return Err(AppError::Invalid(
+                "username must be 3 to 32 characters".into(),
+            ));
+        }
+        if !username
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '_')
+        {
+            return Err(AppError::Invalid(
+                "username may only contain letters, digits and _".into(),
+            ));
+        }
+        let pw_len = self.password.chars().count();
+        if !(8..=128).contains(&pw_len) {
+            return Err(AppError::Invalid(
+                "password must be 8 to 128 characters".into(),
+            ));
+        }
+        Ok(Self {
+            username,
+            password: self.password,
+        })
+    }
+
+    /// The username as it is stored: trimmed and lowercase.
+    pub fn normalized_username(&self) -> String {
+        self.username.trim().to_lowercase()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -72,6 +132,29 @@ mod tests {
         assert!(note("ok", &"b".repeat(MAX_BODY_LEN + 1))
             .validate()
             .is_err());
+    }
+
+    fn creds(u: &str, p: &str) -> Credentials {
+        Credentials {
+            username: u.into(),
+            password: p.into(),
+        }
+    }
+
+    #[test]
+    fn usernames_are_normalised_and_checked() {
+        let c = creds("  Zaid_01 ", "password1").validate_new().unwrap();
+        assert_eq!(c.username, "zaid_01");
+        assert!(creds("ab", "password1").validate_new().is_err());
+        assert!(creds("has space", "password1").validate_new().is_err());
+        assert!(creds("dash-name", "password1").validate_new().is_err());
+        assert!(creds(&"a".repeat(33), "password1").validate_new().is_err());
+    }
+
+    #[test]
+    fn short_password_is_rejected() {
+        assert!(creds("zaid", "short").validate_new().is_err());
+        assert!(creds("zaid", "12345678").validate_new().is_ok());
     }
 
     #[test]

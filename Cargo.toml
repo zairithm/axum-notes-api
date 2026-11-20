@@ -6,7 +6,9 @@ description = "REST API for notes, built with Axum"
 license = "MIT"
 
 [dependencies]
+argon2 = "0.5"
 axum = { version = "0.8", features = ["macros"] }
+jsonwebtoken = "9"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "postgres", "migrate", "macros"] }
@@ -14,3 +16,10 @@ tokio = { version = "1", features = ["full"] }
 
 [dev-dependencies]
 tower = { version = "0.5", features = ["util"] }
+
+# Argon2 is deliberately slow; without optimisation it takes seconds per hash in debug builds and tests.
+[profile.dev.package.argon2]
+opt-level = 3
+
+[profile.dev.package.blake2]
+opt-level = 3
