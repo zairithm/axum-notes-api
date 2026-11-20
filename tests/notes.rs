@@ -125,3 +125,72 @@ async fn unknown_ids_are_404() {
         StatusCode::NOT_FOUND
     );
 }
+
+#[tokio::test]
+async fn errors_are_json_with_the_right_status() {
+    let app = axum_notes_api::app();
+
+    let (status, body) = call(&app, Method::GET, "/notes/42", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, json!({"error": "note 42 not found"}));
+
+    let (status, body) = call(&app, Method::GET, "/notes/abc", None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(body["error"].is_string());
+
+    let (status, body) = call(&app, Method::GET, "/nope", None).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body, json!({"error": "no such route"}));
+}
+
+#[tokio::test]
+async fn invalid_fields_are_422() {
+    let app = axum_notes_api::app();
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/notes",
+        Some(json!({"title": "   ", "body": "x"})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert_eq!(body, json!({"error": "title must not be empty"}));
+
+    call(&app, Method::POST, "/notes", Some(json!({"title": "ok"}))).await;
+    let (status, _) = call(&app, Method::PUT, "/notes/1", Some(json!({"title": ""}))).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+}
+
+#[tokio::test]
+async fn bad_json_is_400_and_json() {
+    let app = axum_notes_api::app();
+    // Missing the required title field.
+    let (status, body) = call(&app, Method::POST, "/notes", Some(json!({"body": "x"}))).await;
+    assert!(status.is_client_error());
+    assert!(body["error"].as_str().unwrap().contains("title"));
+
+    // Unknown field.
+    let (status, body) = call(
+        &app,
+        Method::POST,
+        "/notes",
+        Some(json!({"title": "t", "colour": "red"})),
+    )
+    .await;
+    assert!(status.is_client_error());
+    assert!(body["error"].as_str().unwrap().contains("colour"));
+}
+
+#[tokio::test]
+async fn title_is_trimmed_and_body_optional() {
+    let app = axum_notes_api::app();
+    let (status, note) = call(
+        &app,
+        Method::POST,
+        "/notes",
+        Some(json!({"title": "  tidy  "})),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(note, json!({"id": 1, "title": "tidy", "body": ""}));
+}
