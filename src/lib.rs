@@ -19,7 +19,9 @@ use axum::{Json, Router};
 use serde_json::{json, Value};
 
 pub mod error;
+pub mod memory;
 pub mod models;
+pub mod postgres;
 pub mod store;
 
 use error::{AppError, AppJson, AppPath};
@@ -60,18 +62,18 @@ async fn create_note(
     AppJson(new): AppJson<NewNote>,
 ) -> Result<(StatusCode, Json<Note>), AppError> {
     let new = new.validate()?;
-    Ok((StatusCode::CREATED, Json(store.create(new))))
+    Ok((StatusCode::CREATED, Json(store.create(new).await?)))
 }
 
-async fn list_notes(State(store): State<Store>) -> Json<Vec<Note>> {
-    Json(store.list())
+async fn list_notes(State(store): State<Store>) -> Result<Json<Vec<Note>>, AppError> {
+    Ok(Json(store.list().await?))
 }
 
 async fn get_note(
     State(store): State<Store>,
     AppPath(id): AppPath<u64>,
 ) -> Result<Json<Note>, AppError> {
-    store.get(id).map(Json).ok_or(AppError::NotFound(id))
+    Ok(Json(store.get(id).await?))
 }
 
 async fn update_note(
@@ -80,19 +82,13 @@ async fn update_note(
     AppJson(new): AppJson<NewNote>,
 ) -> Result<Json<Note>, AppError> {
     let new = new.validate()?;
-    store
-        .update(id, new)
-        .map(Json)
-        .ok_or(AppError::NotFound(id))
+    Ok(Json(store.update(id, new).await?))
 }
 
 async fn delete_note(
     State(store): State<Store>,
     AppPath(id): AppPath<u64>,
 ) -> Result<StatusCode, AppError> {
-    if store.delete(id) {
-        Ok(StatusCode::NO_CONTENT)
-    } else {
-        Err(AppError::NotFound(id))
-    }
+    store.delete(id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }

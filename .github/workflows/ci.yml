@@ -7,6 +7,20 @@ on:
 jobs:
   check:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: notes
+          POSTGRES_PASSWORD: notes
+          POSTGRES_DB: notes
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U notes"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -17,5 +31,8 @@ jobs:
         run: cargo fmt --all --check
       - name: Lint
         run: cargo clippy --all-targets -- -D warnings
-      - name: Test
+      - name: Test (in-memory and PostgreSQL)
+        env:
+          DATABASE_URL: postgres://notes:notes@localhost:5432/notes
+          REQUIRE_DB: "1"
         run: cargo test --all
