@@ -18,6 +18,8 @@ pub enum AppError {
     BadJson(String),
     /// The path did not match, e.g. `/notes/abc`.
     BadPath(String),
+    /// Something failed on our side (e.g. the database). Details are logged, not sent.
+    Internal,
 }
 
 impl AppError {
@@ -26,6 +28,7 @@ impl AppError {
             Self::NotFound(_) => StatusCode::NOT_FOUND,
             Self::Invalid(_) => StatusCode::UNPROCESSABLE_ENTITY,
             Self::BadJson(_) | Self::BadPath(_) => StatusCode::BAD_REQUEST,
+            Self::Internal => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 
@@ -33,6 +36,7 @@ impl AppError {
         match self {
             Self::NotFound(id) => format!("note {id} not found"),
             Self::Invalid(msg) | Self::BadJson(msg) | Self::BadPath(msg) => msg.clone(),
+            Self::Internal => "internal error".into(),
         }
     }
 }
